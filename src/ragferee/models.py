@@ -13,6 +13,7 @@ class Citation(BaseModel):
     page: int = Field(ge=1)
 
     def __str__(self) -> str:
+        """Format as "Law 12, 3. Disciplinary action, p. 112"."""
         return f"Law {self.law_number}, {self.section}, p. {self.page}"
 
 
@@ -28,6 +29,7 @@ class Chunk(BaseModel):
     text: str = Field(min_length=1)
 
     def citation(self) -> Citation:
+        """Return the citation for this chunk's location."""
         return Citation(law_number=self.law_number, section=self.section, page=self.page)
 
 

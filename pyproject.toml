@@ -33,11 +33,19 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B", "UP", "D", "FBT"]
+ignore = ["D107"]  # __init__ is described by the class docstring
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]  # test names describe the behaviour
 
 [tool.mypy]
 strict = true
-files = ["src"]
+files = ["src", "tests"]
+mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]

@@ -28,7 +28,7 @@ class Downloader:
         self.client = client
         self.destination = destination
 
-    def download(self, file: RemoteFile, force: bool = False) -> Path:
+    def download(self, file: RemoteFile, *, force: bool = False) -> Path:
         """Download a file unless it already exists, and return its path."""
         target = self.destination / file.filename
         if target.exists() and not force:
@@ -62,3 +62,10 @@ class Downloader:
             raise DownloadError(
                 f"Checksum mismatch for {file.url}: expected {expected}, got {actual}"
             )
+
+
+LAWS_OF_THE_GAME = RemoteFile(
+    url="https://downloads.theifab.com/downloads/laws-of-the-game-202627-single-pages?l=en",
+    filename="laws-of-the-game-2026-27.pdf",
+    sha256="89398520b353c6d995a1bb2557c97dc3c5aa1712c1d3009589f580a5a23c6a7d",
+)
