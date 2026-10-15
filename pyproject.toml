@@ -1,17 +1,43 @@
 [project]
 name = "ragferee"
 version = "0.1.0"
-description = "Add your description here"
+description = "Local RAG Q&A assistant for the IFAB Laws of the Game, with cited answers"
 readme = "README.md"
 authors = [
     { name = "Arabind Meher", email = "arabindmeher.99@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.0",
+]
 
 [project.scripts]
-ragferee = "ragferee:main"
+ragferee = "ragferee.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pre-commit>=4.7.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
