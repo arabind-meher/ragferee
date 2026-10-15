@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from ragferee!")
+"""RAG Q&A assistant for the IFAB Laws of the Game."""
