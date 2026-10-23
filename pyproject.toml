@@ -11,6 +11,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
+    "pymupdf>=2.0",
 ]
 
 [project.scripts]
@@ -47,6 +48,7 @@ strict = true
 files = ["src", "tests"]
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
+untyped_calls_exclude = ["pymupdf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
