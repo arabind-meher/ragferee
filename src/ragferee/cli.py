@@ -6,14 +6,18 @@ from importlib.metadata import version
 from pathlib import Path
 
 import httpx
+import psycopg
 from pydantic import ValidationError
 
 from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
-from ragferee.ingest import LawsParser, read_lines, save_chunks
+from ragferee.embeddings import FastEmbedder
+from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
+from ragferee.storage import ChunkStore
 
 RAW_DATA_DIR = Path("data/raw")
 CHUNKS_PATH = Path("data/processed/chunks.json")
+MODELS_DIR = Path("data/models")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,6 +31,8 @@ def main(argv: list[str] | None = None) -> int:
         return _download(force=args.force)
     if args.command == "ingest":
         return _ingest()
+    if args.command == "index":
+        return _index()
     return 1
 
 
@@ -41,6 +47,7 @@ def _build_parser() -> argparse.ArgumentParser:
     download = commands.add_parser("download", help="download the Laws of the Game PDF")
     download.add_argument("--force", action="store_true", help="download again even if present")
     commands.add_parser("ingest", help="split the downloaded PDF into citable chunks")
+    commands.add_parser("index", help="embed the chunks and store them in Postgres")
     return parser
 
 
@@ -83,4 +90,36 @@ def _ingest() -> int:
     chunks = LawsParser().parse(read_lines(pdf))
     save_chunks(chunks, CHUNKS_PATH)
     print(f"Saved {len(chunks)} chunks to {CHUNKS_PATH}")
+    return 0
+
+
+def _index() -> int:
+    if not CHUNKS_PATH.exists():
+        print(f"{CHUNKS_PATH} not found; run `ragferee ingest` first", file=sys.stderr)
+        return 1
+    try:
+        url = get_settings().get_postgres_url()
+    except ValidationError:
+        print("Invalid settings; run `ragferee check` for details", file=sys.stderr)
+        return 1
+
+    chunks = load_chunks(CHUNKS_PATH)
+    embedder = FastEmbedder(MODELS_DIR)
+    try:
+        with psycopg.connect(url, connect_timeout=5) as connection:
+            store = ChunkStore(connection, embedder.dimension)
+            store.create_schema()
+            print(f"Embedding {len(chunks)} chunks...")
+            embeddings = embedder.embed_documents([chunk.text for chunk in chunks])
+            store.replace_all(chunks, embeddings)
+            count = store.count()
+    except psycopg.OperationalError as error:
+        print("Cannot reach Postgres; start it with `make db-up`", file=sys.stderr)
+        print(error, file=sys.stderr)
+        return 1
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+
+    print(f"Indexed {count} chunks")
     return 0

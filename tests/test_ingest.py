@@ -1,4 +1,10 @@
-from ragferee.ingest import LawsParser, Line
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from ragferee.ingest import LawsParser, Line, load_chunks, save_chunks
+from ragferee.models import Chunk
 
 
 def line(page: int, text: str, size: float = 9.0, *, bold: bool = False) -> Line:
@@ -65,3 +71,30 @@ def test_footers_and_stray_labels_are_skipped() -> None:
 
     assert len(chunks) == 1
     assert "Laws of the Game" not in chunks[0].text
+
+
+def test_saved_chunks_load_back_unchanged(tmp_path: Path) -> None:
+    chunks = [
+        Chunk(
+            law_number=11,
+            law_title="Offside",
+            section="1. Offside position",
+            page=109,
+            text="It is not an offence to be in an offside position.",
+        ),
+    ]
+    path = tmp_path / "processed" / "chunks.json"
+
+    save_chunks(chunks, path)
+
+    assert load_chunks(path) == chunks
+
+
+def test_load_chunks_rejects_invalid_data(tmp_path: Path) -> None:
+    path = tmp_path / "chunks.json"
+    path.write_text(
+        '[{"law_number": 99, "law_title": "x", "section": "x", "page": 1, "text": "x"}]'
+    )
+
+    with pytest.raises(ValidationError):
+        load_chunks(path)

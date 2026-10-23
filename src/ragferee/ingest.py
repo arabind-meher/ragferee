@@ -5,7 +5,6 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-import pymupdf
 from pydantic import TypeAdapter
 
 from ragferee.models import Chunk
@@ -15,6 +14,7 @@ LAWS_PAGES = range(44, 152)  # PDF pages holding Laws 1-17; equal to the printed
 _LAW_DIVIDER = re.compile(r"^Law\s*(\d+)$")
 _SECTION = re.compile(r"^\d+\.\s+\S")
 _MIN_CHUNK_CHARS = 20  # shorter text is a stray diagram label
+_CHUNK_LIST = TypeAdapter(list[Chunk])
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,8 @@ class Line:
 
 def read_lines(path: Path, pages: range = LAWS_PAGES) -> Iterator[Line]:
     """Yield the text lines of the given pages in reading order."""
+    import pymupdf  # imported here: it takes about two seconds to load
+
     with pymupdf.open(path) as document:
         for number in pages:
             page_lines: list[tuple[float, float, Line]] = []
@@ -106,4 +108,9 @@ class LawsParser:
 def save_chunks(chunks: list[Chunk], path: Path) -> None:
     """Write chunks to a JSON file, creating its folder if needed."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(TypeAdapter(list[Chunk]).dump_json(chunks, indent=2))
+    path.write_bytes(_CHUNK_LIST.dump_json(chunks, indent=2))
+
+
+def load_chunks(path: Path) -> list[Chunk]:
+    """Read chunks saved by save_chunks, validating every one."""
+    return _CHUNK_LIST.validate_json(path.read_bytes())
