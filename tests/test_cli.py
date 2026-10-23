@@ -37,3 +37,10 @@ def test_check_invalid_settings_returns_1(capsys: pytest.CaptureFixture[str]) ->
     err = capsys.readouterr().err
     assert exit_code == 1
     assert "POSTGRES_USER" in err
+
+
+def test_search_with_invalid_settings_returns_1(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(["search", "offside"])
+
+    assert exit_code == 1
+    assert "ragferee check" in capsys.readouterr().err

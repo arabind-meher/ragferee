@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+import textwrap
 from importlib.metadata import version
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
 from ragferee.embeddings import FastEmbedder
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
+from ragferee.retrieval import Retriever
 from ragferee.storage import ChunkStore
 
 RAW_DATA_DIR = Path("data/raw")
@@ -33,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ingest()
     if args.command == "index":
         return _index()
+    if args.command == "search":
+        return _search(args.question, limit=args.limit)
     return 1
 
 
@@ -48,6 +52,9 @@ def _build_parser() -> argparse.ArgumentParser:
     download.add_argument("--force", action="store_true", help="download again even if present")
     commands.add_parser("ingest", help="split the downloaded PDF into citable chunks")
     commands.add_parser("index", help="embed the chunks and store them in Postgres")
+    search = commands.add_parser("search", help="show the chunks most relevant to a question")
+    search.add_argument("question", help="the question to search for")
+    search.add_argument("--limit", type=int, default=5, help="number of results (default: 5)")
     return parser
 
 
@@ -122,4 +129,32 @@ def _index() -> int:
         return 1
 
     print(f"Indexed {count} chunks")
+    return 0
+
+
+def _search(question: str, *, limit: int) -> int:
+    try:
+        url = get_settings().get_postgres_url()
+    except ValidationError:
+        print("Invalid settings; run `ragferee check` for details", file=sys.stderr)
+        return 1
+
+    embedder = FastEmbedder(MODELS_DIR)
+    try:
+        with psycopg.connect(url, connect_timeout=5) as connection:
+            if ChunkStore(connection, embedder.dimension).count() == 0:
+                print("No chunks indexed; run `ragferee index` first", file=sys.stderr)
+                return 1
+            results = Retriever(connection, embedder).search(question, limit=limit)
+    except psycopg.OperationalError as error:
+        print("Cannot reach Postgres; start it with `make db-up`", file=sys.stderr)
+        print(error, file=sys.stderr)
+        return 1
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+
+    for rank, result in enumerate(results, start=1):
+        print(f"{rank}. {result.chunk.citation()}  ({result.score:.4f})")
+        print(f"   {textwrap.shorten(result.chunk.text, width=100, placeholder=' …')}")
     return 0
