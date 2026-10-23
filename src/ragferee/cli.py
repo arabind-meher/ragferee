@@ -3,10 +3,17 @@
 import argparse
 import sys
 from importlib.metadata import version
+from pathlib import Path
 
+import httpx
 from pydantic import ValidationError
 
 from ragferee.config import get_settings
+from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
+from ragferee.ingest import LawsParser, read_lines, save_chunks
+
+RAW_DATA_DIR = Path("data/raw")
+CHUNKS_PATH = Path("data/processed/chunks.json")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,6 +23,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "check":
         return _check()
+    if args.command == "download":
+        return _download(force=args.force)
+    if args.command == "ingest":
+        return _ingest()
     return 1
 
 
@@ -27,6 +38,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('ragferee')}")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check", help="validate settings from .env and the environment")
+    download = commands.add_parser("download", help="download the Laws of the Game PDF")
+    download.add_argument("--force", action="store_true", help="download again even if present")
+    commands.add_parser("ingest", help="split the downloaded PDF into citable chunks")
     return parser
 
 
@@ -44,4 +58,29 @@ def _check() -> int:
     print("Settings OK")
     print(f"database: {settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}")
     print(f"llm provider: {settings.llm_provider}")
+    return 0
+
+
+def _download(*, force: bool) -> int:
+    with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+        downloader = Downloader(client, RAW_DATA_DIR)
+        try:
+            path = downloader.download(LAWS_OF_THE_GAME, force=force)
+        except DownloadError as error:
+            print(error, file=sys.stderr)
+            return 1
+
+    print(f"PDF ready at {path}")
+    return 0
+
+
+def _ingest() -> int:
+    pdf = RAW_DATA_DIR / LAWS_OF_THE_GAME.filename
+    if not pdf.exists():
+        print(f"{pdf} not found; run `ragferee download` first", file=sys.stderr)
+        return 1
+
+    chunks = LawsParser().parse(read_lines(pdf))
+    save_chunks(chunks, CHUNKS_PATH)
+    print(f"Saved {len(chunks)} chunks to {CHUNKS_PATH}")
     return 0

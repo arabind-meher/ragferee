@@ -26,12 +26,14 @@ class Settings(BaseSettings):
 
     # Validators
     @model_validator(mode="after")
-    def validate_openai_cred(self) -> Self:
+    def check_openai_key(self) -> Self:
+        """Require an OpenAI API key when the OpenAI provider is selected."""
         if self.llm_provider == "openai" and not self.openai_api_key:
             raise ValueError("OpenAI API key is required.")
         return self
 
     def get_postgres_url(self) -> str:
+        """Return the Postgres connection URL with the password escaped."""
         return (
             f"postgresql://{self.postgres_user}"
             f":{quote(self.postgres_password.get_secret_value(), safe='')}"
@@ -43,4 +45,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return the application settings, loaded once and cached."""
     return Settings()
