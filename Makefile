@@ -1,4 +1,4 @@
-.PHONY: install lint format test db-up db-down
+.PHONY: install lint format test hooks db-up db-down
 
 install:
 	uv sync
@@ -14,6 +14,9 @@ format:
 
 test:
 	uv run pytest
+
+hooks:
+	uv run pre-commit run --all-files
 
 db-up:
 	docker compose up -d
