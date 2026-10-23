@@ -95,4 +95,6 @@ def test_replace_all_rejects_empty_input(store: ChunkStore) -> None:
 
 
 def test_count_is_zero_before_schema_exists(connection: psycopg.Connection[TupleRow]) -> None:
+    connection.execute("SET search_path TO ragferee_test")  # hide any real public.chunks
+
     assert ChunkStore(connection, 3).count() == 0

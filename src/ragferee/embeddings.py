@@ -2,9 +2,10 @@
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from fastembed import TextEmbedding
+if TYPE_CHECKING:
+    from fastembed import TextEmbedding
 
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 EMBEDDING_DIMENSION = 384
@@ -43,8 +44,10 @@ class FastEmbedder:
         vector = next(iter(self._get_model().query_embed(text)))
         return _to_list(vector)
 
-    def _get_model(self) -> TextEmbedding:
+    def _get_model(self) -> "TextEmbedding":
         if self._model is None:
+            from fastembed import TextEmbedding  # imported here: slow to load
+
             self._model = TextEmbedding(MODEL_NAME, cache_dir=str(self._cache_dir))
         return self._model
 
