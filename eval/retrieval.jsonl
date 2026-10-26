@@ -1,0 +1,36 @@
+{"question": "How far is the penalty spot from the goal?", "relevant": [{"law": 1, "section": "6. The penalty area"}]}
+{"question": "How long and wide must the pitch be for international games?", "relevant": [{"law": 1, "section": "4. Dimensions for international matches"}]}
+{"question": "Can goal-line technology decide whether it was a goal?", "relevant": [{"law": 1, "section": "11. Goal line technology (GLT)"}]}
+{"question": "How big and heavy should a football be?", "relevant": [{"law": 2, "section": "1. Qualities and measurements"}]}
+{"question": "What happens if the ball bursts during play?", "relevant": [{"law": 2, "section": "2. Replacement of a defective ball"}]}
+{"question": "What is the fewest players a team can have and still play?", "relevant": [{"law": 3, "section": "1. Number of players"}]}
+{"question": "How many subs can a team use in a league or cup game?", "relevant": [{"law": 3, "section": "2. Number of substitutions"}]}
+{"question": "Can a defender swap places with our keeper in the middle of the game?", "relevant": [{"law": 3, "section": "4. Changing the goalkeeper"}]}
+{"question": "Does the captain get any special privileges?", "relevant": [{"law": 3, "section": "10. Team captain"}]}
+{"question": "Can a player wear jewellery?", "relevant": [{"law": 4, "section": "1. Safety"}]}
+{"question": "Do the goalkeepers have to wear different colours from everyone else?", "relevant": [{"law": 4, "section": "3. Colours"}]}
+{"question": "Are shin pads mandatory?", "relevant": [{"law": 4, "section": "2. Compulsory equipment"}]}
+{"question": "When can the ref let play continue after a foul instead of stopping it?", "relevant": [{"law": 5, "section": "3. Powers and duties"}]}
+{"question": "What does the fourth official do?", "relevant": [{"law": 6, "section": "2. Fourth official"}]}
+{"question": "How long can half-time last?", "relevant": [{"law": 7, "section": "2. Half-time interval"}]}
+{"question": "Why does the referee add stoppage time at the end of each half?", "relevant": [{"law": 7, "section": "3. Allowance for time lost"}]}
+{"question": "Can you score straight from kick-off?", "relevant": [{"law": 8, "section": "1. Kick-off"}]}
+{"question": "How does the ref restart play after stopping it for an injury when nobody fouled?", "relevant": [{"law": 8, "section": "2. Dropped ball"}]}
+{"question": "Is the ball still in play if it hits the referee?", "relevant": [{"law": 9, "section": "1. Ball out of play"}, {"law": 9, "section": "2. Ball in play"}]}
+{"question": "Does the whole ball have to cross the line for a goal?", "relevant": [{"law": 10, "section": "1. Goal scored"}]}
+{"question": "How many kicks does each team take in a penalty shoot-out?", "relevant": [{"law": 10, "section": "3. Penalties (penalty shoot-out)"}]}
+{"question": "When is a player in an offside position?", "relevant": [{"law": 11, "section": "1. Offside position"}]}
+{"question": "Can you be offside from a throw-in?", "relevant": [{"law": 11, "section": "3. No offence"}]}
+{"question": "What restart does the other team get for offside?", "relevant": [{"law": 11, "section": "4. Offences and sanctions"}]}
+{"question": "Is it a foul if the ball hits a player's arm?", "relevant": [{"law": 12, "section": "1. Direct free kick"}]}
+{"question": "What happens if a goalkeeper holds the ball too long?", "relevant": [{"law": 12, "section": "3. Corner kick"}]}
+{"question": "What can a player get a yellow card for?", "relevant": [{"law": 12, "section": "4. Disciplinary action"}]}
+{"question": "DOGSO", "relevant": [{"law": 12, "section": "4. Disciplinary action"}]}
+{"question": "How does the referee show that a free kick is indirect?", "relevant": [{"law": 13, "section": "1. Types of free kick"}]}
+{"question": "How far must opponents be at a free kick?", "relevant": [{"law": 13, "section": "2. Procedure"}]}
+{"question": "Where must the keeper stand during a penalty?", "relevant": [{"law": 14, "section": "1. Procedure"}]}
+{"question": "What if a teammate runs into the box too early at a penalty?", "relevant": [{"law": 14, "section": "2. Offences and sanctions"}]}
+{"question": "Can you score directly from a throw-in?", "relevant": [{"law": 15, "section": "The Throw-in"}]}
+{"question": "What if the thrower touches the ball again before anyone else does?", "relevant": [{"law": 15, "section": "2. Offences and sanctions"}]}
+{"question": "Where must opponents be at a goal kick?", "relevant": [{"law": 16, "section": "1. Procedure"}]}
+{"question": "Can a goal be scored directly from a corner?", "relevant": [{"law": 17, "section": "The Corner Kick"}]}
