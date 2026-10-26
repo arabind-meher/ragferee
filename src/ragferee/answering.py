@@ -42,7 +42,8 @@ def cite(text: str, results: Sequence[SearchResult]) -> Answer:
     """Turn the [n] source markers in a reply into citations.
 
     Markers for sources that were not given are removed. The rest are renumbered in
-    order of first appearance, so [1] in the text is always the first citation.
+    order of first appearance, so [1] in the text is always the first citation. A reply
+    with nothing left after that is treated as not covered.
     """
     cited: list[int] = []  # source indexes, in order of first appearance
 
@@ -55,6 +56,8 @@ def cite(text: str, results: Sequence[SearchResult]) -> Answer:
         return f" [{cited.index(index) + 1}]"
 
     renumbered = _MARKER.sub(renumber, text).strip()
+    if not renumbered:
+        return Answer(text=NOT_COVERED_MESSAGE, citations=())
     citations = tuple(results[index].chunk.citation() for index in cited)
     return Answer(text=renumbered, citations=citations)
 

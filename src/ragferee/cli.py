@@ -18,6 +18,7 @@ from ragferee.embeddings import EMBEDDING_DIMENSION, MODELS_DIR, FastEmbedder
 from ragferee.evaluation import EvalReport, Evaluator, load_cases, unknown_sections
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
 from ragferee.llm import LLMError, make_llm
+from ragferee.models import Answer
 from ragferee.retrieval import KEYWORD_WEIGHT, Retriever, SearchMode
 from ragferee.storage import ChunkStore
 
@@ -202,17 +203,21 @@ def _ask(question: str, *, limit: int) -> int:
             print(error, file=sys.stderr)
             return 1
 
+    _print_answer(answer)
+    return 0
+
+
+def _print_answer(answer: Answer) -> None:
     print(answer.text)
     if answer.text == NOT_COVERED_MESSAGE:
-        return 0
+        return
     print()
     if not answer.citations:
         print("(no sources cited)")
-        return 0
+        return
     print("Sources:")
     for number, citation in enumerate(answer.citations, start=1):
         print(f"[{number}] {citation}")
-    return 0
 
 
 def _evaluate(
