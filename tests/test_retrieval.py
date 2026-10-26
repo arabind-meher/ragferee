@@ -4,7 +4,7 @@ from psycopg.rows import TupleRow
 
 from ragferee.embeddings import Embedder
 from ragferee.models import Chunk
-from ragferee.retrieval import RRF_K, Retriever, reciprocal_rank_fusion
+from ragferee.retrieval import RRF_K, Retriever, SearchMode, reciprocal_rank_fusion
 from ragferee.storage import ChunkStore
 
 JEWELLERY = Chunk(
@@ -99,3 +99,20 @@ def test_invalid_arguments_raise(retriever: Retriever) -> None:
         retriever.search("   ")
     with pytest.raises(ValueError, match="at least 1"):
         retriever.search("offside", limit=0)
+
+
+def test_keyword_mode_returns_only_keyword_matches(retriever: Retriever) -> None:
+    results = retriever.search("jewellery", mode=SearchMode.KEYWORD)
+
+    assert [result.chunk for result in results] == [JEWELLERY]
+
+
+def test_vector_mode_ignores_keywords(retriever: Retriever) -> None:
+    results = retriever.search(OFFSIDE.text, mode=SearchMode.VECTOR)
+
+    assert results[0].chunk == OFFSIDE
+    assert len(results) == len(CHUNKS)
+
+
+def test_search_mode_accepts_plain_strings() -> None:
+    assert SearchMode("vector") is SearchMode.VECTOR
