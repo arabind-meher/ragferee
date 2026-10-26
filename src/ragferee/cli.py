@@ -44,7 +44,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ask":
         return _ask(args.question, limit=args.limit)
     if args.command == "eval":
-        return _evaluate(limit=args.limit, mode=SearchMode(args.mode), compare=args.compare)
+        return _evaluate(
+            args.file, limit=args.limit, mode=SearchMode(args.mode), compare=args.compare
+        )
     if args.command == "serve":
         return _serve(host=args.host, port=args.port)
     return 1
@@ -74,6 +76,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--mode", choices=list(SearchMode), default=SearchMode.HYBRID, help="search mode"
     )
     evaluate.add_argument("--compare", action="store_true", help="compare all search modes")
+    evaluate.add_argument(
+        "--file", type=Path, default=EVAL_PATH, help=f"question file (default: {EVAL_PATH})"
+    )
     serve = commands.add_parser("serve", help="run the web API")
     serve.add_argument("--host", default="127.0.0.1", help="address to bind (default: 127.0.0.1)")
     serve.add_argument("--port", type=int, default=8000, help="port to listen on (default: 8000)")
@@ -200,12 +205,12 @@ def _ask(question: str, *, limit: int) -> int:
     return 0
 
 
-def _evaluate(*, limit: int, mode: SearchMode, compare: bool) -> int:
-    if not EVAL_PATH.exists():
-        print(f"{EVAL_PATH} not found; add evaluation questions first", file=sys.stderr)
+def _evaluate(path: Path, *, limit: int, mode: SearchMode, compare: bool) -> int:
+    if not path.exists():
+        print(f"{path} not found; add evaluation questions first", file=sys.stderr)
         return 1
     try:
-        cases = load_cases(EVAL_PATH)
+        cases = load_cases(path)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
@@ -219,7 +224,7 @@ def _evaluate(*, limit: int, mode: SearchMode, compare: bool) -> int:
             return 1
         unknown = unknown_sections(cases, ChunkStore(connection, embedder.dimension).sections())
         if unknown:
-            print(f"Sections in {EVAL_PATH} not found in the index:", file=sys.stderr)
+            print(f"Sections in {path} not found in the index:", file=sys.stderr)
             for ref in unknown:
                 print(f"  Law {ref.law}, {ref.section}", file=sys.stderr)
             return 1
