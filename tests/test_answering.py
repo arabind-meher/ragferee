@@ -2,38 +2,8 @@ import pytest
 
 from ragferee.answering import NOT_COVERED_MESSAGE, Answerer, build_prompt, cite
 from ragferee.llm import NOT_COVERED
-from ragferee.models import Chunk, Citation
-from ragferee.retrieval import SearchResult
-
-
-def _result(law: int, section: str, page: int, text: str) -> SearchResult:
-    chunk = Chunk(law_number=law, law_title=f"Law {law}", section=section, page=page, text=text)
-    return SearchResult(chunk=chunk, score=0.0)
-
-
-RESULTS = [
-    _result(12, "3. Corner kick", 119, "A corner kick is awarded if a goalkeeper holds the ball."),
-    _result(12, "1. Direct free kick", 116, "A direct free kick is awarded for a handball."),
-    _result(11, "1. Offside position", 108, "Being in an offside position is not an offence."),
-]
-
-
-class FakeSearcher:
-    def __init__(self, results: list[SearchResult]) -> None:
-        self.results = results
-
-    def search(self, question: str, *, limit: int) -> list[SearchResult]:
-        return self.results[:limit]
-
-
-class FakeLLM:
-    def __init__(self, reply: str) -> None:
-        self.reply = reply
-        self.prompts: list[str] = []
-
-    def complete(self, system: str, prompt: str) -> str:
-        self.prompts.append(prompt)
-        return self.reply
+from ragferee.models import Citation
+from tests.fakes import RESULTS, FakeLLM, FakeSearcher
 
 
 def test_build_prompt_numbers_sources() -> None:
