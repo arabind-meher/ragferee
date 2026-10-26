@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from ragferee.answering import NOT_COVERED_MESSAGE, Answerer
 from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
-from ragferee.embeddings import FastEmbedder
+from ragferee.embeddings import MODELS_DIR, FastEmbedder
 from ragferee.evaluation import EvalReport, Evaluator, load_cases, unknown_sections
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
 from ragferee.llm import LLMError, make_llm
@@ -23,7 +23,6 @@ from ragferee.storage import ChunkStore
 
 RAW_DATA_DIR = Path("data/raw")
 CHUNKS_PATH = Path("data/processed/chunks.json")
-MODELS_DIR = Path("data/models")
 EVAL_PATH = Path("eval/retrieval.jsonl")
 
 

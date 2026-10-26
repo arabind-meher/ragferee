@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from fastembed import TextEmbedding
 
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
+MODELS_DIR = Path("data/models")
 EMBEDDING_DIMENSION = 384
 
 

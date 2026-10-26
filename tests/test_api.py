@@ -1,10 +1,14 @@
 import psycopg
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from psycopg.rows import TupleRow
 
 from ragferee.answering import NOT_COVERED_MESSAGE
-from ragferee.api import create_app, get_llm, get_searcher
+from ragferee.api import create_app, get_connection, get_llm, get_searcher
+from ragferee.embeddings import Embedder
 from ragferee.llm import LLM, NOT_COVERED, LLMError
+from ragferee.storage import ChunkStore
 from tests.fakes import RESULTS, FakeLLM, FakeSearcher
 
 
@@ -81,3 +85,30 @@ def test_ask_database_failure_returns_503() -> None:
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Database unavailable"}
+
+
+def _health_app(connection: psycopg.Connection[TupleRow]) -> FastAPI:
+    app = create_app()
+    app.dependency_overrides[get_connection] = lambda: connection
+    return app
+
+
+def test_health_reports_chunk_count(
+    connection: psycopg.Connection[TupleRow], store: ChunkStore, fake_embedder: Embedder
+) -> None:
+    chunks = [result.chunk for result in RESULTS]
+    store.replace_all(chunks, fake_embedder.embed_documents([chunk.text for chunk in chunks]))
+
+    response = TestClient(_health_app(connection)).get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "chunks": 3}
+
+
+def test_health_without_chunks_returns_503(
+    connection: psycopg.Connection[TupleRow], store: ChunkStore
+) -> None:
+    response = TestClient(_health_app(connection)).get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "No chunks indexed"}
