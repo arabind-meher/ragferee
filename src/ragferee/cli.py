@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from ragferee.answering import NOT_COVERED_MESSAGE, Answerer
 from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
-from ragferee.embeddings import MODELS_DIR, FastEmbedder
+from ragferee.embeddings import EMBEDDING_DIMENSION, MODELS_DIR, FastEmbedder
 from ragferee.evaluation import EvalReport, Evaluator, load_cases, unknown_sections
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
 from ragferee.llm import LLMError, make_llm
@@ -45,6 +45,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ask(args.question, limit=args.limit)
     if args.command == "eval":
         return _evaluate(limit=args.limit, mode=SearchMode(args.mode), compare=args.compare)
+    if args.command == "serve":
+        return _serve(host=args.host, port=args.port)
     return 1
 
 
@@ -72,6 +74,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--mode", choices=list(SearchMode), default=SearchMode.HYBRID, help="search mode"
     )
     evaluate.add_argument("--compare", action="store_true", help="compare all search modes")
+    serve = commands.add_parser("serve", help="run the web API")
+    serve.add_argument("--host", default="127.0.0.1", help="address to bind (default: 127.0.0.1)")
+    serve.add_argument("--port", type=int, default=8000, help="port to listen on (default: 8000)")
     return parser
 
 
@@ -230,6 +235,21 @@ def _evaluate(*, limit: int, mode: SearchMode, compare: bool) -> int:
         _print_comparison(reports)
     else:
         _print_report(reports[0])
+    return 0
+
+
+def _serve(*, host: str, port: int) -> int:
+    # The API checks these at startup too; checking first gives a short message, not a traceback.
+    connection = _connect()
+    if connection is None:
+        return 1
+    with connection:
+        if not _has_index(connection, EMBEDDING_DIMENSION):
+            return 1
+
+    import uvicorn  # imported here: only needed to serve
+
+    uvicorn.run("ragferee.api:app", host=host, port=port)
     return 0
 
 

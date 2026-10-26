@@ -53,6 +53,13 @@ def test_ask_with_invalid_settings_returns_1(capsys: pytest.CaptureFixture[str])
     assert "ragferee check" in capsys.readouterr().err
 
 
+def test_serve_with_invalid_settings_returns_1(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(["serve"])
+
+    assert exit_code == 1
+    assert "ragferee check" in capsys.readouterr().err
+
+
 def test_eval_without_question_file_returns_1(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(["eval"])
 
