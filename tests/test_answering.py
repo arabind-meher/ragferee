@@ -39,6 +39,13 @@ def test_cite_without_markers_has_no_citations() -> None:
     assert answer.citations == ()
 
 
+def test_cite_with_only_unknown_markers_is_not_covered() -> None:
+    answer = cite(" [7] ", RESULTS)
+
+    assert answer.text == NOT_COVERED_MESSAGE
+    assert answer.citations == ()
+
+
 def test_answerer_without_results_skips_llm() -> None:
     llm = FakeLLM("should not be used")
 
