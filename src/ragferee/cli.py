@@ -11,7 +11,7 @@ import psycopg
 from psycopg.rows import TupleRow
 from pydantic import ValidationError
 
-from ragferee.answering import Answerer
+from ragferee.answering import NOT_COVERED_MESSAGE, Answerer
 from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
 from ragferee.embeddings import FastEmbedder
@@ -184,6 +184,8 @@ def _ask(question: str, *, limit: int) -> int:
             return 1
 
     print(answer.text)
+    if answer.text == NOT_COVERED_MESSAGE:
+        return 0
     print()
     if not answer.citations:
         print("(no sources cited)")
