@@ -4,7 +4,7 @@ Retrieval-augmented Q&A over the IFAB Laws of the Game. Ask a football rules que
 
 ## Status
 
-Cited answers work end to end from the command line; a web API is next.
+Cited answers work end to end, from the command line and through a web API.
 
 | Area                                                       | Status  |
 |------------------------------------------------------------|---------|
@@ -14,7 +14,7 @@ Cited answers work end to end from the command line; a web API is next.
 | Hybrid search (vector + keyword, Reciprocal Rank Fusion)   | Done    |
 | Retrieval evaluation (hit rate, MRR, mode comparison)      | Done    |
 | Answers with citations from an LLM (`ragferee ask`)        | Done    |
-| Web API (FastAPI)                                          | Planned |
+| Web API (FastAPI)                                          | Done    |
 
 ## Requirements
 
@@ -101,6 +101,36 @@ uv run ragferee search "What happens if a goalkeeper holds the ball too long?"
 | `search "<question>" [--limit N]`            | Show the most relevant chunks with citations        |
 | `ask "<question>" [--limit N]`               | Answer a question, citing Law, section and page     |
 | `eval [--limit N] [--mode MODE] [--compare]` | Measure retrieval quality on `eval/retrieval.jsonl` |
+| `serve [--host HOST] [--port PORT]`          | Run the web API (default `127.0.0.1:8000`)          |
+
+### Web API
+
+```bash
+uv run ragferee serve
+```
+
+```bash
+curl -s localhost:8000/ask -H 'Content-Type: application/json' \
+     -d '{"question": "Can a player be offside from a throw-in?"}'
+```
+
+```json
+{
+  "text": "No — there is no offside offence if a player receives the ball directly from a throw-in [1]. …",
+  "citations": [
+    {"law_number": 11, "section": "3. No offence", "page": 111},
+    {"law_number": 11, "section": "1. Offside position", "page": 109}
+  ]
+}
+```
+
+| Endpoint      | What it does                                                                     |
+|---------------|----------------------------------------------------------------------------------|
+| `POST /ask`   | Answer `{"question": "...", "limit": 5}`; `[n]` in the text is `citations[n-1]`  |
+| `GET /health` | Report the number of indexed chunks; 503 if the database is down or empty        |
+| `GET /docs`   | Interactive API documentation                                                    |
+
+Invalid input returns 422, a failed LLM request 502, and an unavailable database 503.
 
 ## How it works
 
@@ -113,6 +143,8 @@ uv run ragferee search "What happens if a goalkeeper holds the ball too long?"
 5. **Answer** – the top 5 chunks are sent to the LLM as numbered sources, with instructions to answer only from
    them and cite each statement as `[n]`. Those numbers are mapped back to the chunks' citations; unknown
    numbers are dropped, and the model replies "not covered" when the sources don't answer the question.
+6. **Serve** – the FastAPI app loads the embedding model, LLM client and a Postgres connection pool once at
+   startup, then answers each request with the same code as `ragferee ask`.
 
 ## Retrieval quality
 
