@@ -15,14 +15,14 @@ from ragferee.models import Chunk
 RRF_K = 60  # standard Reciprocal Rank Fusion constant (Cormack et al., 2009)
 _CANDIDATE_FACTOR = 4  # candidates taken from each search per requested result
 
-_VECTOR_SQL = "SELECT id FROM chunks ORDER BY embedding <=> %s LIMIT %s"
+_VECTOR_SQL = "SELECT id FROM chunks ORDER BY embedding <=> %s, id LIMIT %s"
 _KEYWORD_SQL = """
     WITH q AS (
         SELECT replace(plainto_tsquery('english', %s)::text, ' & ', ' | ')::tsquery AS query
     )
     SELECT id FROM chunks, q
     WHERE search @@ q.query
-    ORDER BY ts_rank(search, q.query) DESC
+    ORDER BY ts_rank(search, q.query) DESC, id  -- id breaks ties, so results are repeatable
     LIMIT %s
 """
 _FETCH_SQL = """

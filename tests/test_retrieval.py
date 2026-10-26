@@ -116,3 +116,18 @@ def test_vector_mode_ignores_keywords(retriever: Retriever) -> None:
 
 def test_search_mode_accepts_plain_strings() -> None:
     assert SearchMode("vector") is SearchMode.VECTOR
+
+
+def test_keyword_ties_come_back_in_index_order(
+    store: ChunkStore, connection: psycopg.Connection[TupleRow], fake_embedder: Embedder
+) -> None:
+    sections = [f"{number}. Section" for number in range(1, 6)]
+    chunks = [
+        Chunk(law_number=5, law_title="The Referee", section=section, page=73, text="Play stops.")
+        for section in sections
+    ]
+    store.replace_all(chunks, fake_embedder.embed_documents([c.text for c in chunks]))
+
+    results = Retriever(connection, fake_embedder).search("stops", limit=5, mode=SearchMode.KEYWORD)
+
+    assert [result.chunk.section for result in results] == sections
