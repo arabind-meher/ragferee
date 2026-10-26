@@ -92,16 +92,16 @@ uv run ragferee search "What happens if a goalkeeper holds the ball too long?"
    …
 ```
 
-| Command                                      | What it does                                        |
-|----------------------------------------------|-----------------------------------------------------|
-| `check`                                      | Validate settings without revealing secrets         |
-| `download [--force]`                         | Download the PDF and verify its checksum            |
-| `ingest`                                     | Parse the PDF into chunks                           |
-| `index`                                      | Embed the chunks and store them in Postgres         |
-| `search "<question>" [--limit N]`            | Show the most relevant chunks with citations        |
-| `ask "<question>" [--limit N]`               | Answer a question, citing Law, section and page     |
-| `eval [--limit N] [--mode MODE] [--compare]` | Measure retrieval quality on `eval/retrieval.jsonl` |
-| `serve [--host HOST] [--port PORT]`          | Run the web API (default `127.0.0.1:8000`)          |
+| Command                             | What it does                                         |
+|-------------------------------------|------------------------------------------------------|
+| `check`                             | Validate settings without revealing secrets          |
+| `download [--force]`                | Download the PDF and verify its checksum             |
+| `ingest`                            | Parse the PDF into chunks                            |
+| `index`                             | Embed the chunks and store them in Postgres          |
+| `search "<question>" [--limit N]`   | Show the most relevant chunks with citations         |
+| `ask "<question>" [--limit N]`      | Answer a question, citing Law, section and page      |
+| `eval [--compare] [--file PATH]`    | Measure retrieval quality (`--help` for all options) |
+| `serve [--host HOST] [--port PORT]` | Run the web API (default `127.0.0.1:8000`)           |
 
 ### Web API
 
@@ -139,7 +139,7 @@ Invalid input returns 422, a failed LLM request 502, and an unavailable database
 2. **Embed** – each chunk is embedded locally with `BAAI/bge-small-en-v1.5` (fastembed, 384 dimensions); no API key needed.
 3. **Store** – chunks and embeddings live in Postgres with pgvector; a generated full-text column supports keyword search.
 4. **Search** – a question is matched by meaning (cosine distance) and by keywords, and the two rankings are merged
-   with Reciprocal Rank Fusion.
+   with weighted Reciprocal Rank Fusion; keyword results count for a quarter (see below).
 5. **Answer** – the top 5 chunks are sent to the LLM as numbered sources, with instructions to answer only from
    them and cite each statement as `[n]`. Those numbers are mapped back to the chunks' citations; unknown
    numbers are dropped, and the model replies "not covered" when the sources don't answer the question.
@@ -148,18 +148,36 @@ Invalid input returns 422, a failed LLM request 502, and an unavailable database
 
 ## Retrieval quality
 
-`uv run ragferee eval --compare` on 36 hand-checked questions covering all 17 Laws
-(`eval/retrieval.jsonl`, many phrased in everyday words such as "penalty spot" or "shin pads"):
+Retrieval is measured with `uv run ragferee eval --compare` on two sets of hand-checked questions, many phrased in
+everyday words such as "shin pads" or "linesman":
 
-| Mode    | Hit@1 | Hit@5 | MRR  |
-|---------|-------|-------|------|
-| Hybrid  | 0.72  | 0.92  | 0.81 |
-| Vector  | 0.64  | 0.97  | 0.77 |
-| Keyword | 0.50  | 0.75  | 0.60 |
+- `eval/retrieval.jsonl` – 36 questions covering all 17 Laws, used for tuning
+- `eval/retrieval-holdout.jsonl` – 27 different questions, used only to confirm a tuning choice
 
-Hybrid search ranks the right section first most often. Vector search alone finds slightly more answers in the
-top 5, so how keyword results are weighted is worth revisiting. Tables in the PDF, such as pitch dimensions,
-extract poorly and are a known weak spot.
+| Mode                            | Main set (36)<br>Hit@1 / Hit@5 / MRR | Held-out set (27)<br>Hit@1 / Hit@5 / MRR |
+|---------------------------------|--------------------------------------|------------------------------------------|
+| Hybrid, equal weights (before)  | 0.69 / 0.92 / 0.80                   | 0.52 / 0.85 / 0.64                       |
+| **Hybrid, keyword weight 0.25** | **0.75 / 0.97 / 0.83**               | **0.56 / 0.89 / 0.70**                   |
+| Vector only                     | 0.64 / 0.97 / 0.77                   | 0.67 / 0.96 / 0.77                       |
+| Keyword only                    | 0.50 / 0.72 / 0.59                   | 0.48 / 0.67 / 0.56                       |
+
+Keyword search uses OR matching, so it matches most chunks (a median of 84 of 135 per question) and ranks them
+noisily. With equal weights it pushed correct sections out of the top 5. Counting keyword results for a quarter,
+and taking 50 candidates from each search instead of 20, improved hybrid search on both sets. The weight was chosen
+on the main set for the best hit@5, since all top-5 chunks reach the LLM. Across all 63 questions, hybrid and
+vector search now perform about the same: hybrid places the right section first slightly more often, and vector
+search finds it in the top 5 slightly more often.
+
+Tried, but didn't help:
+
+- **Law and section header in the embedded text** – improved vector search on the main set (MRR 0.77 → 0.82) but
+  made it worse on the held-out set (0.77 → 0.72): chunks from the same Law started to look alike. Reverted.
+- **Cover-density ranking (`ts_rank_cd`)** – keyword hit@5 on the main set fell from 0.72 to 0.42.
+- **Section and Law titles weighted in the keyword index** – keyword hit@5 fell to 0.53.
+- **Length-normalised `ts_rank`** – better for keyword search alone (hit@5 0.83), no gain in hybrid search.
+
+Known weak spots: everyday words that the Laws don't use ("linesman" for assistant referee, "game" for match),
+and tables in the PDF, such as pitch dimensions, which extract poorly.
 
 ## Development
 

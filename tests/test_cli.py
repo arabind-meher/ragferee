@@ -65,3 +65,10 @@ def test_eval_without_question_file_returns_1(capsys: pytest.CaptureFixture[str]
 
     assert exit_code == 1
     assert "retrieval.jsonl not found" in capsys.readouterr().err
+
+
+def test_eval_with_missing_file_returns_1(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(["eval", "--file", "missing.jsonl"])
+
+    assert exit_code == 1
+    assert "missing.jsonl not found" in capsys.readouterr().err
