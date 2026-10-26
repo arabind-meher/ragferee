@@ -131,3 +131,47 @@ def test_keyword_ties_come_back_in_index_order(
     results = Retriever(connection, fake_embedder).search("stops", limit=5, mode=SearchMode.KEYWORD)
 
     assert [result.chunk.section for result in results] == sections
+
+
+def test_lower_weight_ranks_list_below_others() -> None:
+    fused = reciprocal_rank_fusion([[1], [2]], weights=[1.0, 0.5])
+
+    assert [item for item, _ in fused] == [1, 2]
+    assert fused[1][1] == 0.5 / (RRF_K + 1)
+
+
+def test_weighted_list_can_still_win_by_appearing_in_both() -> None:
+    fused = reciprocal_rank_fusion([[1, 2], [2]], weights=[1.0, 0.5])
+
+    assert fused[0][0] == 2
+
+
+def test_no_weights_means_equal_weights() -> None:
+    rankings = [[1, 2, 3], [3, 4]]
+
+    assert reciprocal_rank_fusion(rankings) == reciprocal_rank_fusion(rankings, weights=[1, 1])
+
+
+@pytest.mark.parametrize("weights", [[1.0], [1.0, -0.5]])
+def test_invalid_weights_raise(weights: list[float]) -> None:
+    with pytest.raises(ValueError, match="(?i)weight"):
+        reciprocal_rank_fusion([[1], [2]], weights=weights)
+
+
+def test_zero_keyword_weight_matches_vector_order(
+    store: ChunkStore, connection: psycopg.Connection[TupleRow], fake_embedder: Embedder
+) -> None:
+    store.replace_all(CHUNKS, fake_embedder.embed_documents([c.text for c in CHUNKS]))
+    retriever = Retriever(connection, fake_embedder, keyword_weight=0)
+
+    hybrid = retriever.search("jewellery", mode=SearchMode.HYBRID)
+    vector = retriever.search("jewellery", mode=SearchMode.VECTOR)
+
+    assert [r.chunk for r in hybrid][: len(vector)] == [r.chunk for r in vector]
+
+
+def test_negative_keyword_weight_raises(
+    connection: psycopg.Connection[TupleRow], fake_embedder: Embedder
+) -> None:
+    with pytest.raises(ValueError, match="keyword_weight"):
+        Retriever(connection, fake_embedder, keyword_weight=-1)

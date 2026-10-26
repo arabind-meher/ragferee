@@ -18,7 +18,7 @@ from ragferee.embeddings import EMBEDDING_DIMENSION, MODELS_DIR, FastEmbedder
 from ragferee.evaluation import EvalReport, Evaluator, load_cases, unknown_sections
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
 from ragferee.llm import LLMError, make_llm
-from ragferee.retrieval import Retriever, SearchMode
+from ragferee.retrieval import KEYWORD_WEIGHT, Retriever, SearchMode
 from ragferee.storage import ChunkStore
 
 RAW_DATA_DIR = Path("data/raw")
@@ -45,7 +45,11 @@ def main(argv: list[str] | None = None) -> int:
         return _ask(args.question, limit=args.limit)
     if args.command == "eval":
         return _evaluate(
-            args.file, limit=args.limit, mode=SearchMode(args.mode), compare=args.compare
+            args.file,
+            limit=args.limit,
+            mode=SearchMode(args.mode),
+            compare=args.compare,
+            keyword_weight=args.keyword_weight,
         )
     if args.command == "serve":
         return _serve(host=args.host, port=args.port)
@@ -78,6 +82,12 @@ def _build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--compare", action="store_true", help="compare all search modes")
     evaluate.add_argument(
         "--file", type=Path, default=EVAL_PATH, help=f"question file (default: {EVAL_PATH})"
+    )
+    evaluate.add_argument(
+        "--keyword-weight",
+        type=float,
+        default=KEYWORD_WEIGHT,
+        help=f"weight of keyword results in hybrid search (default: {KEYWORD_WEIGHT})",
     )
     serve = commands.add_parser("serve", help="run the web API")
     serve.add_argument("--host", default="127.0.0.1", help="address to bind (default: 127.0.0.1)")
@@ -205,7 +215,9 @@ def _ask(question: str, *, limit: int) -> int:
     return 0
 
 
-def _evaluate(path: Path, *, limit: int, mode: SearchMode, compare: bool) -> int:
+def _evaluate(
+    path: Path, *, limit: int, mode: SearchMode, compare: bool, keyword_weight: float
+) -> int:
     if not path.exists():
         print(f"{path} not found; add evaluation questions first", file=sys.stderr)
         return 1
@@ -228,9 +240,9 @@ def _evaluate(path: Path, *, limit: int, mode: SearchMode, compare: bool) -> int
             for ref in unknown:
                 print(f"  Law {ref.law}, {ref.section}", file=sys.stderr)
             return 1
-        evaluator = Evaluator(Retriever(connection, embedder))
         modes = list(SearchMode) if compare else [mode]
         try:
+            evaluator = Evaluator(Retriever(connection, embedder, keyword_weight=keyword_weight))
             reports = [evaluator.run(cases, limit=limit, mode=m) for m in modes]
         except ValueError as error:
             print(error, file=sys.stderr)
