@@ -44,3 +44,10 @@ def test_search_with_invalid_settings_returns_1(capsys: pytest.CaptureFixture[st
 
     assert exit_code == 1
     assert "ragferee check" in capsys.readouterr().err
+
+
+def test_eval_without_question_file_returns_1(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = main(["eval"])
+
+    assert exit_code == 1
+    assert "retrieval.jsonl not found" in capsys.readouterr().err

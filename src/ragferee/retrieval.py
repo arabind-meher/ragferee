@@ -1,6 +1,7 @@
 """Find the chunks most relevant to a question."""
 
 from collections.abc import Sequence
+from enum import StrEnum
 
 import psycopg
 from pgvector import Vector
@@ -44,6 +45,14 @@ def reciprocal_rank_fusion(
     return sorted(scores.items(), key=lambda entry: entry[1], reverse=True)
 
 
+class SearchMode(StrEnum):
+    """Which searches to run: both combined, or one on its own for comparison."""
+
+    HYBRID = "hybrid"
+    VECTOR = "vector"
+    KEYWORD = "keyword"
+
+
 class SearchResult(BaseModel):
     """A chunk found for a question, with its fused relevance score.
 
@@ -63,7 +72,9 @@ class Retriever:
         self._connection = connection
         self._embedder = embedder
 
-    def search(self, question: str, *, limit: int = 5) -> list[SearchResult]:
+    def search(
+        self, question: str, *, limit: int = 5, mode: SearchMode = SearchMode.HYBRID
+    ) -> list[SearchResult]:
         """Return the chunks most relevant to the question, best first."""
         if not question.strip():
             raise ValueError("Question must not be empty")
@@ -72,10 +83,11 @@ class Retriever:
 
         register_vector(self._connection)
         candidates = limit * _CANDIDATE_FACTOR
-        rankings = [
-            self._vector_ids(question, candidates),
-            self._keyword_ids(question, candidates),
-        ]
+        rankings: list[list[int]] = []
+        if mode in (SearchMode.HYBRID, SearchMode.VECTOR):
+            rankings.append(self._vector_ids(question, candidates))
+        if mode in (SearchMode.HYBRID, SearchMode.KEYWORD):
+            rankings.append(self._keyword_ids(question, candidates))
         fused = reciprocal_rank_fusion(rankings)[:limit]
         chunks = self._fetch([item for item, _ in fused])
         return [SearchResult(chunk=chunks[item], score=score) for item, score in fused]

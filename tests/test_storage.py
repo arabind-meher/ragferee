@@ -74,3 +74,9 @@ def test_count_is_zero_before_schema_exists(connection: psycopg.Connection[Tuple
     connection.execute("SET search_path TO ragferee_test")  # hide any real public.chunks
 
     assert ChunkStore(connection, 3).count() == 0
+
+
+def test_sections_lists_each_law_section_once(store: ChunkStore, fake_embedder: Embedder) -> None:
+    store.replace_all(CHUNKS, fake_embedder.embed_documents([c.text for c in CHUNKS]))
+
+    assert store.sections() == {(11, "1. Offside position"), (11, "2. Offside offence")}

@@ -8,18 +8,21 @@ from pathlib import Path
 
 import httpx
 import psycopg
+from psycopg.rows import TupleRow
 from pydantic import ValidationError
 
 from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
 from ragferee.embeddings import FastEmbedder
+from ragferee.evaluation import EvalReport, Evaluator, load_cases, unknown_sections
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
-from ragferee.retrieval import Retriever
+from ragferee.retrieval import Retriever, SearchMode
 from ragferee.storage import ChunkStore
 
 RAW_DATA_DIR = Path("data/raw")
 CHUNKS_PATH = Path("data/processed/chunks.json")
 MODELS_DIR = Path("data/models")
+EVAL_PATH = Path("eval/retrieval.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
         return _index()
     if args.command == "search":
         return _search(args.question, limit=args.limit)
+    if args.command == "eval":
+        return _evaluate(limit=args.limit, mode=SearchMode(args.mode), compare=args.compare)
     return 1
 
 
@@ -55,6 +60,12 @@ def _build_parser() -> argparse.ArgumentParser:
     search = commands.add_parser("search", help="show the chunks most relevant to a question")
     search.add_argument("question", help="the question to search for")
     search.add_argument("--limit", type=int, default=5, help="number of results (default: 5)")
+    evaluate = commands.add_parser("eval", help="measure how well search finds expected sections")
+    evaluate.add_argument("--limit", type=int, default=5, help="results per question (default: 5)")
+    evaluate.add_argument(
+        "--mode", choices=list(SearchMode), default=SearchMode.HYBRID, help="search mode"
+    )
+    evaluate.add_argument("--compare", action="store_true", help="compare all search modes")
     return parser
 
 
@@ -104,57 +115,133 @@ def _index() -> int:
     if not CHUNKS_PATH.exists():
         print(f"{CHUNKS_PATH} not found; run `ragferee ingest` first", file=sys.stderr)
         return 1
-    try:
-        url = get_settings().get_postgres_url()
-    except ValidationError:
-        print("Invalid settings; run `ragferee check` for details", file=sys.stderr)
+    connection = _connect()
+    if connection is None:
         return 1
 
     chunks = load_chunks(CHUNKS_PATH)
     embedder = FastEmbedder(MODELS_DIR)
-    try:
-        with psycopg.connect(url, connect_timeout=5) as connection:
-            store = ChunkStore(connection, embedder.dimension)
+    with connection:
+        store = ChunkStore(connection, embedder.dimension)
+        try:
             store.create_schema()
             print(f"Embedding {len(chunks)} chunks...")
             embeddings = embedder.embed_documents([chunk.text for chunk in chunks])
             store.replace_all(chunks, embeddings)
-            count = store.count()
-    except psycopg.OperationalError as error:
-        print("Cannot reach Postgres; start it with `make db-up`", file=sys.stderr)
-        print(error, file=sys.stderr)
-        return 1
-    except ValueError as error:
-        print(error, file=sys.stderr)
-        return 1
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
+        count = store.count()
 
     print(f"Indexed {count} chunks")
     return 0
 
 
 def _search(question: str, *, limit: int) -> int:
-    try:
-        url = get_settings().get_postgres_url()
-    except ValidationError:
-        print("Invalid settings; run `ragferee check` for details", file=sys.stderr)
+    connection = _connect()
+    if connection is None:
         return 1
 
     embedder = FastEmbedder(MODELS_DIR)
-    try:
-        with psycopg.connect(url, connect_timeout=5) as connection:
-            if ChunkStore(connection, embedder.dimension).count() == 0:
-                print("No chunks indexed; run `ragferee index` first", file=sys.stderr)
-                return 1
+    with connection:
+        if not _has_index(connection, embedder.dimension):
+            return 1
+        try:
             results = Retriever(connection, embedder).search(question, limit=limit)
-    except psycopg.OperationalError as error:
-        print("Cannot reach Postgres; start it with `make db-up`", file=sys.stderr)
-        print(error, file=sys.stderr)
-        return 1
-    except ValueError as error:
-        print(error, file=sys.stderr)
-        return 1
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
 
     for rank, result in enumerate(results, start=1):
         print(f"{rank}. {result.chunk.citation()}  ({result.score:.4f})")
         print(f"   {textwrap.shorten(result.chunk.text, width=100, placeholder=' …')}")
     return 0
+
+
+def _evaluate(*, limit: int, mode: SearchMode, compare: bool) -> int:
+    if not EVAL_PATH.exists():
+        print(f"{EVAL_PATH} not found; add evaluation questions first", file=sys.stderr)
+        return 1
+    try:
+        cases = load_cases(EVAL_PATH)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    connection = _connect()
+    if connection is None:
+        return 1
+
+    embedder = FastEmbedder(MODELS_DIR)
+    with connection:
+        if not _has_index(connection, embedder.dimension):
+            return 1
+        unknown = unknown_sections(cases, ChunkStore(connection, embedder.dimension).sections())
+        if unknown:
+            print(f"Sections in {EVAL_PATH} not found in the index:", file=sys.stderr)
+            for ref in unknown:
+                print(f"  Law {ref.law}, {ref.section}", file=sys.stderr)
+            return 1
+        evaluator = Evaluator(Retriever(connection, embedder))
+        modes = list(SearchMode) if compare else [mode]
+        try:
+            reports = [evaluator.run(cases, limit=limit, mode=m) for m in modes]
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
+
+    if compare:
+        _print_comparison(reports)
+    else:
+        _print_report(reports[0])
+    return 0
+
+
+def _print_report(report: EvalReport) -> None:
+    print(f"Retrieval ({report.mode}, top {report.limit}) on {len(report.results)} questions")
+    scores = [f"hit@{k} {report.hit_rate_at(k):.2f}" for k in _cutoffs(report.limit)]
+    print("  " + "   ".join([*scores, f"MRR {report.mrr:.2f}"]))
+    if report.misses:
+        print(f"Misses ({len(report.misses)}):")
+    for miss in report.misses:
+        expected = "; ".join(f"Law {ref.law}, {ref.section}" for ref in miss.case.relevant)
+        retrieved = " · ".join(str(citation) for citation in miss.retrieved[:3])
+        print(f'  "{miss.case.question}"')
+        print(f"     expected: {expected}")
+        print(f"     got:      {retrieved or 'nothing'}")
+
+
+def _print_comparison(reports: list[EvalReport]) -> None:
+    cutoffs = _cutoffs(reports[0].limit)
+    print(f"Retrieval on {len(reports[0].results)} questions")
+    print("  " + " ".join([f"{'mode':<8}", *(f"{f'hit@{k}':>6}" for k in cutoffs), f"{'MRR':>6}"]))
+    for report in reports:
+        scores = (f"{report.hit_rate_at(k):>6.2f}" for k in cutoffs)
+        print("  " + " ".join([f"{report.mode:<8}", *scores, f"{report.mrr:>6.2f}"]))
+
+
+def _cutoffs(limit: int) -> list[int]:
+    """Return the k values to report hit rate for: 1 and the limit, without repeats."""
+    return sorted({1, limit})
+
+
+def _connect() -> psycopg.Connection[TupleRow] | None:
+    """Open a database connection, or print why not and return None."""
+    try:
+        url = get_settings().get_postgres_url()
+    except ValidationError:
+        print("Invalid settings; run `ragferee check` for details", file=sys.stderr)
+        return None
+    try:
+        return psycopg.connect(url, connect_timeout=5)
+    except psycopg.OperationalError as error:
+        print("Cannot reach Postgres; start it with `make db-up`", file=sys.stderr)
+        print(error, file=sys.stderr)
+        return None
+
+
+def _has_index(connection: psycopg.Connection[TupleRow], dimension: int) -> bool:
+    """Return whether chunks are indexed, printing a hint if not."""
+    if ChunkStore(connection, dimension).count() == 0:
+        print("No chunks indexed; run `ragferee index` first", file=sys.stderr)
+        return False
+    return True

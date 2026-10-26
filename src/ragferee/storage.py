@@ -70,6 +70,13 @@ class ChunkStore:
             return 0
         return int(self._scalar("SELECT count(*) FROM chunks"))
 
+    def sections(self) -> set[tuple[int, str]]:
+        """Return every (Law number, section) pair in the index."""
+        rows = self._connection.execute(
+            "SELECT DISTINCT law_number, section FROM chunks"
+        ).fetchall()
+        return {(row[0], row[1]) for row in rows}
+
     def _check_dimension(self) -> None:
         actual = self._scalar(
             "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
