@@ -28,6 +28,7 @@ jobs:
       # Throwaway credentials for the CI-only database, not secrets.
       POSTGRES_USER: ragferee
       POSTGRES_PASSWORD: ragferee
+      RAGFEREE_REQUIRE_DB: "1"  # fail, rather than skip, database tests if Postgres is down
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0

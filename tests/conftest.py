@@ -1,4 +1,5 @@
 import hashlib
+import os
 from collections.abc import Iterator
 
 import psycopg
@@ -35,7 +36,9 @@ def fake_embedder() -> Embedder:
 def connection() -> Iterator[psycopg.Connection[TupleRow]]:
     try:
         conn = psycopg.connect(get_settings().get_postgres_url(), connect_timeout=2)
-    except (ValidationError, psycopg.OperationalError):
+    except (ValidationError, psycopg.OperationalError) as error:
+        if os.environ.get("RAGFEREE_REQUIRE_DB") == "1":
+            pytest.fail(f"Postgres is required but not available: {error}")
         pytest.skip("Postgres not available")
     with conn:
         conn.execute("CREATE SCHEMA ragferee_test")
