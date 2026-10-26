@@ -7,13 +7,14 @@ from typing import Annotated, cast
 
 import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 from psycopg.rows import TupleRow
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field, StringConstraints
 
 from ragferee.answering import Answerer, Searcher
 from ragferee.embeddings import Embedder
-from ragferee.llm import LLM
+from ragferee.llm import LLM, LLMError
 from ragferee.models import Answer
 from ragferee.retrieval import Retriever
 
@@ -80,6 +81,19 @@ def ask(
     return Answerer(searcher, llm, limit=body.limit).answer(body.question)
 
 
+# Errors
+
+
+def _llm_failed(request: Request, error: Exception) -> JSONResponse:
+    """The API worked but the language model behind it failed, so 502 Bad Gateway."""
+    return JSONResponse(status_code=502, content={"detail": str(error)})
+
+
+def _database_unavailable(request: Request, error: Exception) -> JSONResponse:
+    """Hide connection details from the client."""
+    return JSONResponse(status_code=503, content={"detail": "Database unavailable"})
+
+
 def create_app() -> FastAPI:
     """Create the web application."""
     app = FastAPI(
@@ -88,6 +102,8 @@ def create_app() -> FastAPI:
         version=version("ragferee"),
     )
     app.include_router(router)
+    app.add_exception_handler(LLMError, _llm_failed)
+    app.add_exception_handler(psycopg.OperationalError, _database_unavailable)
     return app
 
 

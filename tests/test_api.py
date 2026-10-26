@@ -1,10 +1,16 @@
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
 from ragferee.answering import NOT_COVERED_MESSAGE
 from ragferee.api import create_app, get_llm, get_searcher
-from ragferee.llm import LLM, NOT_COVERED
+from ragferee.llm import LLM, NOT_COVERED, LLMError
 from tests.fakes import RESULTS, FakeLLM, FakeSearcher
+
+
+class FailingLLM:
+    def complete(self, system: str, prompt: str) -> str:
+        raise LLMError("OpenAI request failed: rate limit")
 
 
 def _client(llm: LLM) -> TestClient:
@@ -55,3 +61,23 @@ def test_ask_rejects_limit_out_of_range(limit: int) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_ask_llm_failure_returns_502() -> None:
+    response = _client(FailingLLM()).post("/ask", json={"question": "Offside?"})
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "OpenAI request failed: rate limit"}
+
+
+def test_ask_database_failure_returns_503() -> None:
+    def unavailable() -> None:
+        raise psycopg.OperationalError("connection refused at 10.0.0.1")
+
+    app = create_app()
+    app.dependency_overrides[get_searcher] = unavailable
+
+    response = TestClient(app).post("/ask", json={"question": "Offside?"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database unavailable"}
