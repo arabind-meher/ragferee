@@ -4,6 +4,20 @@ from pydantic import SecretStr, ValidationError
 from ragferee.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep settings from the shell out of these tests; each test sets what it needs."""
+    for name in (
+        "POSTGRES_DB",
+        "POSTGRES_HOST",
+        "POSTGRES_PORT",
+        "LLM_PROVIDER",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 def test_url_format() -> None:
     settings = Settings(
         _env_file=None, postgres_user="user", postgres_password=SecretStr("password")
