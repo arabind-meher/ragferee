@@ -10,6 +10,24 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: ragferee
+          POSTGRES_PASSWORD: ragferee
+          POSTGRES_DB: ragferee
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ragferee -d ragferee"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Throwaway credentials for the CI-only database, not secrets.
+      POSTGRES_USER: ragferee
+      POSTGRES_PASSWORD: ragferee
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
