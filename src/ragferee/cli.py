@@ -11,11 +11,13 @@ import psycopg
 from psycopg.rows import TupleRow
 from pydantic import ValidationError
 
+from ragferee.answering import NOT_COVERED_MESSAGE, Answerer
 from ragferee.config import get_settings
 from ragferee.download import LAWS_OF_THE_GAME, Downloader, DownloadError
 from ragferee.embeddings import FastEmbedder
 from ragferee.evaluation import EvalReport, Evaluator, load_cases, unknown_sections
 from ragferee.ingest import LawsParser, load_chunks, read_lines, save_chunks
+from ragferee.llm import LLMError, make_llm
 from ragferee.retrieval import Retriever, SearchMode
 from ragferee.storage import ChunkStore
 
@@ -40,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
         return _index()
     if args.command == "search":
         return _search(args.question, limit=args.limit)
+    if args.command == "ask":
+        return _ask(args.question, limit=args.limit)
     if args.command == "eval":
         return _evaluate(limit=args.limit, mode=SearchMode(args.mode), compare=args.compare)
     return 1
@@ -60,6 +64,9 @@ def _build_parser() -> argparse.ArgumentParser:
     search = commands.add_parser("search", help="show the chunks most relevant to a question")
     search.add_argument("question", help="the question to search for")
     search.add_argument("--limit", type=int, default=5, help="number of results (default: 5)")
+    ask = commands.add_parser("ask", help="answer a question with citations to the Laws")
+    ask.add_argument("question", help="the question to answer")
+    ask.add_argument("--limit", type=int, default=5, help="sources to answer from (default: 5)")
     evaluate = commands.add_parser("eval", help="measure how well search finds expected sections")
     evaluate.add_argument("--limit", type=int, default=5, help="results per question (default: 5)")
     evaluate.add_argument(
@@ -155,6 +162,37 @@ def _search(question: str, *, limit: int) -> int:
     for rank, result in enumerate(results, start=1):
         print(f"{rank}. {result.chunk.citation()}  ({result.score:.4f})")
         print(f"   {textwrap.shorten(result.chunk.text, width=100, placeholder=' …')}")
+    return 0
+
+
+def _ask(question: str, *, limit: int) -> int:
+    connection = _connect()
+    if connection is None:
+        return 1
+
+    embedder = FastEmbedder(MODELS_DIR)
+    with connection:
+        if not _has_index(connection, embedder.dimension):
+            return 1
+        try:
+            answerer = Answerer(
+                Retriever(connection, embedder), make_llm(get_settings()), limit=limit
+            )
+            answer = answerer.answer(question)
+        except (ValueError, LLMError) as error:
+            print(error, file=sys.stderr)
+            return 1
+
+    print(answer.text)
+    if answer.text == NOT_COVERED_MESSAGE:
+        return 0
+    print()
+    if not answer.citations:
+        print("(no sources cited)")
+        return 0
+    print("Sources:")
+    for number, citation in enumerate(answer.citations, start=1):
+        print(f"[{number}] {citation}")
     return 0
 
 

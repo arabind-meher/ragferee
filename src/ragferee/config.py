@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # LLM
     llm_provider: Literal["mock", "openai"] = "mock"
     openai_api_key: SecretStr | None = None
+    openai_model: str = Field(default="gpt-5-mini", min_length=1)
 
     # Validators
     @model_validator(mode="after")
