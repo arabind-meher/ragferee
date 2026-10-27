@@ -7,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 from ragferee import ui
 from ragferee.models import Answer, Citation
-from ragferee.ui import ApiError, ask, chunk_count, format_sources
+from ragferee.ui import ApiError, ApiStatus, api_status, ask, format_sources
 
 CITATIONS = [
     {"law_number": 11, "section": "3. No offence", "page": 111},
@@ -17,6 +17,7 @@ ANSWER = {
     "text": "No offence from a throw-in [1]. Otherwise offside applies [1] [2].",
     "citations": CITATIONS,
 }
+ONLINE = ApiStatus(chunks=135, model="gpt-5-mini")
 
 
 def make_client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
@@ -76,19 +77,21 @@ def test_ask_timeout_raises() -> None:
         ask(make_client(handler), "Offside?", limit=5)
 
 
-def test_chunk_count_when_healthy() -> None:
-    assert chunk_count(respond(200, {"status": "ok", "chunks": 135})) == 135
+def test_api_status_when_healthy() -> None:
+    client = respond(200, {"status": "ok", "chunks": 135, "model": "gpt-5-mini"})
+
+    assert api_status(client) == ApiStatus(chunks=135, model="gpt-5-mini")
 
 
-def test_chunk_count_when_unhealthy() -> None:
-    assert chunk_count(respond(503, {"detail": "No chunks indexed"})) is None
+def test_api_status_when_unhealthy() -> None:
+    assert api_status(respond(503, {"detail": "No chunks indexed"})) is None
 
 
-def test_chunk_count_when_unreachable() -> None:
+def test_api_status_when_unreachable() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")
 
-    assert chunk_count(make_client(handler)) is None
+    assert api_status(make_client(handler)) is None
 
 
 def test_format_sources_numbers_citations_in_order() -> None:
@@ -109,7 +112,7 @@ def _app() -> None:
 
 
 def run_app(
-    monkeypatch: pytest.MonkeyPatch, *, chunks: int | None, reply: Answer | ApiError
+    monkeypatch: pytest.MonkeyPatch, *, status: ApiStatus | None, reply: Answer | ApiError
 ) -> tuple[AppTest, list[tuple[str, int]]]:
     asked: list[tuple[str, int]] = []
 
@@ -119,22 +122,24 @@ def run_app(
             raise reply
         return reply
 
-    monkeypatch.setattr(ui, "chunk_count", lambda client: chunks)
+    monkeypatch.setattr(ui, "api_status", lambda client: status)
     monkeypatch.setattr(ui, "ask", fake_ask)
     return AppTest.from_function(_app).run(), asked
 
 
 def test_app_shows_api_status(monkeypatch: pytest.MonkeyPatch) -> None:
-    app, _ = run_app(monkeypatch, chunks=135, reply=Answer.model_validate(ANSWER))
+    app, _ = run_app(monkeypatch, status=ONLINE, reply=Answer.model_validate(ANSWER))
 
     assert not app.exception
     assert app.title[0].value == "Ask about the Laws of the Game 2026/27"
-    assert app.sidebar.success[0].value == "API online · 135 Law passages indexed"
+    assert app.sidebar.success[0].value == (
+        "API online · 135 Law passages indexed  \nModel: gpt-5-mini"
+    )
     assert len(app.chat_input) == 1
 
 
 def test_app_shows_answer_with_sources(monkeypatch: pytest.MonkeyPatch) -> None:
-    app, asked = run_app(monkeypatch, chunks=135, reply=Answer.model_validate(ANSWER))
+    app, asked = run_app(monkeypatch, status=ONLINE, reply=Answer.model_validate(ANSWER))
 
     app.sidebar.slider[0].set_value(3)
     app.chat_input[0].set_value("Offside from a throw-in?").run()
@@ -147,7 +152,7 @@ def test_app_shows_answer_with_sources(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_app_keeps_history_until_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
-    app, _ = run_app(monkeypatch, chunks=135, reply=Answer.model_validate(ANSWER))
+    app, _ = run_app(monkeypatch, status=ONLINE, reply=Answer.model_validate(ANSWER))
 
     app.chat_input[0].set_value("Offside from a throw-in?").run()
     app.run()
@@ -159,7 +164,7 @@ def test_app_keeps_history_until_cleared(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_app_example_not_covered(monkeypatch: pytest.MonkeyPatch) -> None:
     not_covered = Answer(text="The Laws don't cover this.", citations=())
-    app, asked = run_app(monkeypatch, chunks=135, reply=not_covered)
+    app, asked = run_app(monkeypatch, status=ONLINE, reply=not_covered)
 
     app.sidebar.button[3].click().run()
 
@@ -168,7 +173,7 @@ def test_app_example_not_covered(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_app_when_api_offline(monkeypatch: pytest.MonkeyPatch) -> None:
-    app, _ = run_app(monkeypatch, chunks=None, reply=ApiError("Can't reach the ragferee API"))
+    app, _ = run_app(monkeypatch, status=None, reply=ApiError("Can't reach the ragferee API"))
 
     app.chat_input[0].set_value("Offside?").run()
 

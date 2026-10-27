@@ -32,10 +32,11 @@ class AskRequest(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """The service is up, with the number of indexed chunks."""
+    """The service is up, with the number of indexed chunks and the model that answers."""
 
     status: Literal["ok"]
     chunks: int
+    model: str
 
 
 # Shared services
@@ -117,12 +118,13 @@ router = APIRouter()
 @router.get("/health", responses={503: {"description": "Database unavailable or empty"}})
 def health(
     connection: Annotated[psycopg.Connection[TupleRow], Depends(get_connection)],
+    llm: Annotated[LLM, Depends(get_llm)],
 ) -> HealthResponse:
     """Check that the database is reachable and chunks are indexed."""
     chunks = ChunkStore(connection, EMBEDDING_DIMENSION).count()
     if chunks == 0:
         raise HTTPException(status_code=503, detail="No chunks indexed")
-    return HealthResponse(status="ok", chunks=chunks)
+    return HealthResponse(status="ok", chunks=chunks, model=llm.name)
 
 
 @router.post("/ask")

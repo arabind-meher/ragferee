@@ -1,6 +1,7 @@
 """Web chat for asking questions about the Laws of the Game, over the ragferee API."""
 
 import os
+from dataclasses import dataclass
 
 import httpx
 import streamlit as st
@@ -27,6 +28,14 @@ class ApiError(Exception):
     """A request to the ragferee API failed; the message is shown to the user."""
 
 
+@dataclass(frozen=True)
+class ApiStatus:
+    """A ready API: how many Law passages are indexed, and the model that answers."""
+
+    chunks: int
+    model: str
+
+
 def ask(client: httpx.Client, question: str, *, limit: int) -> Answer:
     """Ask the API a question and return its cited answer."""
     try:
@@ -47,15 +56,16 @@ def ask(client: httpx.Client, question: str, *, limit: int) -> Answer:
     return Answer.model_validate_json(response.content)
 
 
-def chunk_count(client: httpx.Client) -> int | None:
-    """Return the number of indexed Law passages, or None if the API is not ready."""
+def api_status(client: httpx.Client) -> ApiStatus | None:
+    """Return the API's status, or None if the API is not ready."""
     try:
         response = client.get("/health")
     except httpx.TransportError:
         return None
     if response.is_error:
         return None
-    return int(response.json()["chunks"])
+    body = response.json()
+    return ApiStatus(chunks=int(body["chunks"]), model=str(body["model"]))
 
 
 def format_sources(answer: Answer) -> str:
@@ -98,11 +108,13 @@ def _sidebar() -> tuple[int, str | None]:
     example = None
     with st.sidebar:
         st.header("ragferee")
-        chunks = chunk_count(_client())
-        if chunks is None:
+        status = api_status(_client())
+        if status is None:
             st.warning("API starting or offline")
         else:
-            st.success(f"API online · {chunks} Law passages indexed")
+            st.success(
+                f"API online · {status.chunks} Law passages indexed  \nModel: {status.model}"
+            )
 
         limit = st.slider("Sources", min_value=1, max_value=10, value=5)
 

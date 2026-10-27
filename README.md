@@ -82,11 +82,11 @@ curl -s localhost:8000/ask -H 'Content-Type: application/json' \
 }
 ```
 
-| Endpoint      | What it does                                                                     |
-|---------------|----------------------------------------------------------------------------------|
-| `POST /ask`   | Answer `{"question": "...", "limit": 5}`; `[n]` in the text is `citations[n-1]`  |
-| `GET /health` | Report the number of indexed chunks; 503 if the database is down or empty        |
-| `GET /docs`   | Interactive API documentation                                                    |
+| Endpoint      | What it does                                                                       |
+|---------------|------------------------------------------------------------------------------------|
+| `POST /ask`   | Answer `{"question": "...", "limit": 5}`; `[n]` in the text is `citations[n-1]`    |
+| `GET /health` | Report the indexed chunk count and the model; 503 if the database is down or empty |
+| `GET /docs`   | Interactive API documentation                                                      |
 
 Invalid input returns 422, a failed LLM request 502, and an unavailable database 503.
 
