@@ -1,10 +1,12 @@
 # Ragferee
 
-Retrieval-augmented Q&A over the IFAB Laws of the Game. Ask a football rules question and get a plain-language explanation backed by the exact rule text, cited by Law, section and page. Built with Python, FastAPI and pgvector, with hybrid retrieval, an evaluation suite, and a clean object-oriented design.
+Retrieval-augmented Q&A over the IFAB Laws of the Game. Ask a football rules question and get a plain-language explanation backed by the exact rule text, cited by Law, section and page. Built with Python, FastAPI, Streamlit and pgvector, with hybrid retrieval, an evaluation suite, and a clean object-oriented design.
+
+![Ragferee chat answering a question about a goalkeeper holding the ball, with its source cited](docs/ui.png)
 
 ## Status
 
-Cited answers work end to end, from the command line and through a web API.
+Cited answers work end to end, in a chat UI, through a web API and from the command line.
 
 | Area                                                       | Status  |
 |------------------------------------------------------------|---------|
@@ -13,8 +15,9 @@ Cited answers work end to end, from the command line and through a web API.
 | Local embeddings stored in Postgres with pgvector          | Done    |
 | Hybrid search (vector + keyword, Reciprocal Rank Fusion)   | Done    |
 | Retrieval evaluation (hit rate, MRR, mode comparison)      | Done    |
-| Answers with citations from an LLM (`ragferee ask`)        | Done    |
+| Answers with citations from an LLM                         | Done    |
 | Web API (FastAPI)                                          | Done    |
+| Chat UI (Streamlit)                                        | Done    |
 
 ## Requirements
 
@@ -22,16 +25,24 @@ Cited answers work end to end, from the command line and through a web API.
 - Docker with Docker Compose
 - make
 
-## Setup
+## Quick start
 
 ```bash
 make install
 cp .env.example .env    # then fill in POSTGRES_USER and POSTGRES_PASSWORD
-make db-up
-uv run ragferee check
+make db-up              # start Postgres
+make setup              # download the Laws, split them into chunks and index them
+make run                # start the API and the chat UI
 ```
 
-`ragferee check` validates your settings and prints a summary without revealing secrets.
+Then open <http://localhost:8501> and ask a question, or pick one of the examples. Press Ctrl+C to stop both.
+
+`make setup` is needed once; the first run also downloads a 65 MB embedding model. With the default
+`LLM_PROVIDER=mock`, everything runs without an API key and answers are placeholders with real citations; set
+`LLM_PROVIDER=openai` and `OPENAI_API_KEY` in `.env` for real answers.
+
+Answers use only the retrieved Law text, and every citation comes from a retrieved chunk, so the model cannot
+invent a Law, section or page. When the Laws don't cover a question, ragferee says so instead of guessing.
 
 ## Configuration
 
@@ -48,19 +59,41 @@ Settings are read from `.env` and environment variables (environment variables w
 | `OPENAI_API_KEY`    | if `LLM_PROVIDER=openai` |              | OpenAI API key     |
 | `OPENAI_MODEL`      | no                       | `gpt-5-mini` | OpenAI model       |
 
-The database connection URL is built from these values, so it is not configured separately.
+The database connection URL is built from these values, so it is not configured separately. The chat UI only
+talks to the API, at `RAGFEREE_API_URL` (default `http://127.0.0.1:8000`), and needs none of these settings.
+`uv run ragferee check` validates your settings and prints a summary without revealing secrets.
 
-## Usage
+## Web API
 
-Build the search index once (the first run also downloads a 65 MB embedding model):
+`make run` starts the API on port 8000 next to the UI; `uv run ragferee serve` starts it on its own.
 
 ```bash
-uv run ragferee download   # fetch the Laws of the Game PDF into data/raw/
-uv run ragferee ingest     # split it into chunks in data/processed/chunks.json
-uv run ragferee index      # embed the chunks and store them in Postgres
+curl -s localhost:8000/ask -H 'Content-Type: application/json' \
+     -d '{"question": "Can a player be offside from a throw-in?"}'
 ```
 
-Then ask a question:
+```json
+{
+  "text": "No — there is no offside offence if a player receives the ball directly from a throw-in [1]. …",
+  "citations": [
+    {"law_number": 11, "section": "3. No offence", "page": 111},
+    {"law_number": 11, "section": "1. Offside position", "page": 109}
+  ]
+}
+```
+
+| Endpoint      | What it does                                                                     |
+|---------------|----------------------------------------------------------------------------------|
+| `POST /ask`   | Answer `{"question": "...", "limit": 5}`; `[n]` in the text is `citations[n-1]`  |
+| `GET /health` | Report the number of indexed chunks; 503 if the database is down or empty        |
+| `GET /docs`   | Interactive API documentation                                                    |
+
+Invalid input returns 422, a failed LLM request 502, and an unavailable database 503.
+
+## Command line
+
+The `ragferee` command is the tool behind `make setup` and `make run`. It is also useful on its own for asking
+from the terminal, inspecting search results and measuring retrieval quality.
 
 ```bash
 uv run ragferee ask "What happens if a goalkeeper holds the ball too long?"
@@ -74,10 +107,6 @@ goalkeeper's control begins and will visually count down the last five seconds w
 Sources:
 [1] Law 12, 3. Corner kick, p. 119
 ```
-
-Answers use only the retrieved Law text, and every citation comes from a retrieved chunk, so the model cannot
-invent a Law, section or page. With the default `LLM_PROVIDER=mock`, `ask` runs without an API key and returns
-a placeholder answer with real citations; set `LLM_PROVIDER=openai` and `OPENAI_API_KEY` for real answers.
 
 To see the retrieved chunks themselves, search instead:
 
@@ -103,35 +132,6 @@ uv run ragferee search "What happens if a goalkeeper holds the ball too long?"
 | `eval [--compare] [--file PATH]`    | Measure retrieval quality (`--help` for all options) |
 | `serve [--host HOST] [--port PORT]` | Run the web API (default `127.0.0.1:8000`)           |
 
-### Web API
-
-```bash
-uv run ragferee serve
-```
-
-```bash
-curl -s localhost:8000/ask -H 'Content-Type: application/json' \
-     -d '{"question": "Can a player be offside from a throw-in?"}'
-```
-
-```json
-{
-  "text": "No — there is no offside offence if a player receives the ball directly from a throw-in [1]. …",
-  "citations": [
-    {"law_number": 11, "section": "3. No offence", "page": 111},
-    {"law_number": 11, "section": "1. Offside position", "page": 109}
-  ]
-}
-```
-
-| Endpoint      | What it does                                                                     |
-|---------------|----------------------------------------------------------------------------------|
-| `POST /ask`   | Answer `{"question": "...", "limit": 5}`; `[n]` in the text is `citations[n-1]`  |
-| `GET /health` | Report the number of indexed chunks; 503 if the database is down or empty        |
-| `GET /docs`   | Interactive API documentation                                                    |
-
-Invalid input returns 422, a failed LLM request 502, and an unavailable database 503.
-
 ## How it works
 
 1. **Ingest** – PyMuPDF reads pages 44–151 (Laws 1–17). Laws and sections are detected from font size and text,
@@ -145,6 +145,8 @@ Invalid input returns 422, a failed LLM request 502, and an unavailable database
    numbers are dropped, and the model replies "not covered" when the sources don't answer the question.
 6. **Serve** – the FastAPI app loads the embedding model, LLM client and a Postgres connection pool once at
    startup, then answers each request with the same code as `ragferee ask`.
+7. **Chat** – the Streamlit UI is a thin client over the API: it sends each question to `POST /ask` and shows
+   the answer with a numbered list of sources, and the API's status from `GET /health`.
 
 ## Retrieval quality
 
@@ -184,6 +186,8 @@ and tables in the PDF, such as pitch dimensions, which extract poorly.
 | Command                       | What it does                                   |
 |-------------------------------|------------------------------------------------|
 | `make install`                | Install dependencies                           |
+| `make setup`                  | Download, parse and index the Laws             |
+| `make run`                    | Start the API and the chat UI                  |
 | `make lint`                   | Ruff lint, Ruff format check and mypy (strict) |
 | `make format`                 | Format and auto-fix lint issues                |
 | `make test`                   | Run the test suite                             |
