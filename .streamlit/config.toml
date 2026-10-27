@@ -1,0 +1,7 @@
+[server]
+address = "127.0.0.1"  # local only, like the API
+port = 8501
+headless = true  # no email prompt on first run
+
+[browser]
+gatherUsageStats = false  # Streamlit sends anonymous usage data by default
