@@ -19,7 +19,7 @@ hooks:
 	uv run pre-commit run --all-files
 
 db-up:
-	docker compose up -d
+	docker compose up -d --wait
 
 db-down:
 	docker compose down
