@@ -6,3 +6,6 @@ fileWatcherType = "none"  # no reload on save; run with --server.fileWatcherType
 
 [browser]
 gatherUsageStats = false  # Streamlit sends anonymous usage data by default
+
+[client]
+toolbarMode = "viewer"  # hide Deploy, Rerun and Clear cache; keep the theme menu
