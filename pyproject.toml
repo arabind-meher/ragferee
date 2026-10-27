@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
     "pymupdf>=2.0",
+    "streamlit>=1.66.1",
     "uvicorn>=0.54.0",
 ]
 

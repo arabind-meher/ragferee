@@ -31,6 +31,8 @@ class FakeSearcher:
 class FakeLLM:
     """Returns a fixed reply and records the prompts it receives."""
 
+    name = "fake"
+
     def __init__(self, reply: str) -> None:
         self.reply = reply
         self.prompts: list[str] = []

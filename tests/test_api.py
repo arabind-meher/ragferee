@@ -13,6 +13,8 @@ from tests.fakes import RESULTS, FakeLLM, FakeSearcher
 
 
 class FailingLLM:
+    name = "failing"
+
     def complete(self, system: str, prompt: str) -> str:
         raise LLMError("OpenAI request failed: rate limit")
 
@@ -90,6 +92,7 @@ def test_ask_database_failure_returns_503() -> None:
 def _health_app(connection: psycopg.Connection[TupleRow]) -> FastAPI:
     app = create_app()
     app.dependency_overrides[get_connection] = lambda: connection
+    app.dependency_overrides[get_llm] = lambda: FakeLLM("unused")
     return app
 
 
@@ -102,7 +105,7 @@ def test_health_reports_chunk_count(
     response = TestClient(_health_app(connection)).get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "chunks": 3}
+    assert response.json() == {"status": "ok", "chunks": 3, "model": "fake"}
 
 
 def test_health_without_chunks_returns_503(

@@ -19,6 +19,11 @@ class LLMError(Exception):
 class LLM(Protocol):
     """Anything that can complete a prompt with text."""
 
+    @property
+    def name(self) -> str:
+        """The model's name, shown to users."""
+        ...
+
     def complete(self, system: str, prompt: str) -> str:
         """Return the model's reply to a prompt, following the system instructions."""
         ...
@@ -26,6 +31,8 @@ class LLM(Protocol):
 
 class MockLLM:
     """Returns a fixed answer without a network call, for trying the pipeline and tests."""
+
+    name = "mock"
 
     def complete(self, system: str, prompt: str) -> str:
         """Cite the first source if the prompt has one, otherwise report not covered."""
@@ -41,6 +48,11 @@ class OpenAILLM:
         self._api_key = api_key
         self._model = model
         self._client = client
+
+    @property
+    def name(self) -> str:
+        """The OpenAI model, e.g. gpt-5-mini."""
+        return self._model
 
     def complete(self, system: str, prompt: str) -> str:
         """Return the model's reply to a prompt, following the system instructions."""

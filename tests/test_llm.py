@@ -61,7 +61,10 @@ def test_make_llm_returns_mock() -> None:
         llm_provider="mock",
     )
 
-    assert isinstance(make_llm(settings), MockLLM)
+    llm = make_llm(settings)
+
+    assert isinstance(llm, MockLLM)
+    assert llm.name == "mock"
 
 
 def test_make_llm_returns_openai() -> None:
@@ -71,9 +74,13 @@ def test_make_llm_returns_openai() -> None:
         postgres_password=SecretStr("password"),
         llm_provider="openai",
         openai_api_key=SecretStr("test-key"),
+        openai_model="gpt-test",
     )
 
-    assert isinstance(make_llm(settings), OpenAILLM)
+    llm = make_llm(settings)
+
+    assert isinstance(llm, OpenAILLM)
+    assert llm.name == "gpt-test"
 
 
 def test_openai_sends_prompt_and_returns_text() -> None:
