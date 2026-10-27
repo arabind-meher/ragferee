@@ -116,7 +116,7 @@ def _sidebar() -> tuple[int, str | None]:
 
         st.caption(
             "Not an official IFAB product. "
-            "[Laws of the Game](https://www.theifab.com/laws-of-the-game/) · "
+            "[Laws of the Game](https://www.theifab.com/laws/) · "
             f"[API docs]({API_URL}/docs)"
         )
     return limit, example
